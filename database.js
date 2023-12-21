@@ -13,17 +13,42 @@ const pool = mysql
 
 module.exports = {
 	getTutors: async () => {
-		const [rows] = await pool.query('SELECT * FROM tutors')
-		return rows
+		let [rows] = await pool.query('SELECT * FROM tutors')
+		const [availabilityRows] = await pool.query(
+			`SELECT tutor_id, COUNT(tutor_id) as lessons_number
+			 FROM lessons
+			 GROUP BY tutor_id;`,
+		)
+		const tutorsAvailability = availabilityRows.map(row => {
+			return row.lessons_number
+		})
+		newRows = rows.map((row, index) => ({
+			...row,
+			hasLessons: tutorsAvailability[index],
+		}))
+		return newRows
 	},
 	getTutor: async id => {
 		const [rows] = await pool.query(
-			`SELECT * 
-        FROM tutors
-        WHERE id = ?
+			`SELECT UNIX_TIMESTAMP(lesson_date) AS epoch_time 
+        FROM lessons
+        WHERE tutor_id = ?
         `,
 			[id],
 		)
-		return rows[0]
+		const tutorDates = rows.map(row => {
+			return row.epoch_time * 1000
+		})
+		return tutorDates
+	},
+	getTutorsByDate: async date => {
+		const [rows] = await pool.query(
+			`SELECT DISTINCT tutor_id FROM lessons WHERE tutor_id NOT IN (SELECT tutor_id FROM lessons WHERE lesson_date = ? )`,
+			[date],
+		)
+		const tutorsId = rows.map(row => {
+			return row.tutor_id
+		})
+		return tutorsId
 	},
 }
